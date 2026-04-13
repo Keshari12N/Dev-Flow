@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevFlow — Developer Focus Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-0: #080808;
+      --bg-1: #101010;
+      --bg-2: #181818;
+      --bg-3: #202020;
+      --amber: #f5a623;
+      --amber-dim: rgba(245,166,35,0.12);
+      --green: #00d68f;
+      --red: #ff4757;
+      --blue: #4d9de0;
+      --text-0: #f2f2f2;
+      --text-1: #999;
+      --text-2: #555;
+      --border: #242424;
+      --border-2: #2e2e2e;
+      --mono: 'Space Mono', monospace;
+      --sans: 'DM Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+
+    body {
+      background: var(--bg-0);
+      color: var(--text-0);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid texture */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(245,166,35,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(245,166,35,.025) 1px, transparent 1px);
+      background-size: 44px 44px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* Scanlines */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,.06) 3px, rgba(0,0,0,.06) 4px);
+      pointer-events: none; z-index: 0;
+    }
+
+    .app {
+      position: relative; z-index: 1;
+      max-width: 1120px; margin: 0 auto;
+      padding: 0 28px;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ─── HEADER ─── */
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-family: var(--mono); font-size: 16px; font-weight: 700;
+      color: var(--amber); letter-spacing: -0.5px;
+    }
+    .logo em { color: var(--text-2); font-style: normal; }
+    .header-meta {
+      display: flex; align-items: center; gap: 24px;
+    }
+    .live-clock {
+      font-family: var(--mono); font-size: 12px; color: var(--text-1);
+    }
+    .kbd-row {
+      display: flex; gap: 10px; align-items: center;
+    }
+    .kbd-hint { font-family: var(--mono); font-size: 11px; color: var(--text-2); display: flex; align-items: center; gap: 5px; }
+    .k {
+      background: var(--bg-3); border: 1px solid var(--border-2);
+      border-radius: 4px; padding: 1px 6px;
+      font-size: 10px; color: var(--text-1);
+    }
+
+    /* ─── MAIN GRID ─── */
+    main {
+      flex: 1; display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 28px; padding: 28px 0;
+      align-items: start;
+    }
+
+    /* ─── TIMER PANEL ─── */
+    .timer-panel { display: flex; flex-direction: column; gap: 20px; }
+
+    .mode-pills {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 5px; background: var(--bg-1); padding: 5px;
+      border-radius: 12px; border: 1px solid var(--border);
+    }
+    .mode-btn {
+      font-family: var(--mono); font-size: 10px; letter-spacing: .8px;
+      padding: 8px 4px; border: 1px solid transparent; border-radius: 8px;
+      cursor: pointer; background: transparent; color: var(--text-2);
+      transition: all .2s;
+    }
+    .mode-btn.active { background: var(--bg-3); color: var(--amber); border-color: var(--border-2); }
+    .mode-btn:hover:not(.active) { color: var(--text-1); }
+
+    .timer-wrapper { display: flex; flex-direction: column; align-items: center; gap: 26px; }
+
+    .timer-svg-box { position: relative; width: 280px; height: 280px; }
+    .timer-svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+    .ring-track { fill: none; stroke: var(--bg-3); stroke-width: 10; }
+    .ring-progress {
+      fill: none; stroke: var(--amber); stroke-width: 10; stroke-linecap: round;
+      transition: stroke-dashoffset 1s linear, stroke .4s ease;
+    }
+
+    .timer-inner {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    }
+    .timer-time {
+      font-family: var(--mono); font-size: 54px; font-weight: 700;
+      color: var(--text-0); letter-spacing: -3px; line-height: 1;
+    }
+    .timer-time.paused { animation: blink 1.6s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .timer-mode-label {
+      font-family: var(--mono); font-size: 10px; color: var(--text-2);
+      letter-spacing: 2.5px; text-transform: uppercase;
+    }
+    .session-pips { display: flex; gap: 5px; margin-top: 4px; }
+    .pip {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--bg-3); border: 1px solid var(--border-2);
+      transition: all .3s;
+    }
+    .pip.lit { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 8px rgba(245,166,35,.6); }
+
+    .timer-controls { display: flex; align-items: center; gap: 12px; }
+    .btn {
+      font-family: var(--mono); border-radius: 9px; cursor: pointer;
+      transition: all .15s; border: 1px solid var(--border-2);
+      padding: 10px 18px; font-size: 12px; letter-spacing: .3px;
+    }
+    .btn-ghost { background: transparent; color: var(--text-1); }
+    .btn-ghost:hover { border-color: var(--amber); color: var(--amber); }
+    .btn-primary {
+      background: var(--amber); color: #000; font-weight: 700;
+      border-color: var(--amber); padding: 12px 36px; font-size: 13px;
+    }
+    .btn-primary:hover { background: #ffbb40; box-shadow: 0 4px 22px rgba(245,166,35,.35); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .active-task-bar {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: 10px; padding: 13px 16px;
+      display: flex; align-items: center; gap: 11px;
+    }
+    .active-task-prompt { font-family: var(--mono); font-size: 13px; color: var(--green); }
+    .active-task-name { font-family: var(--mono); font-size: 12px; color: var(--text-1); flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .active-task-name.empty { color: var(--text-2); font-style: italic; }
+
+    .stat-strip {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 1px; background: var(--border);
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .stat { background: var(--bg-1); padding: 14px; text-align: center; }
+    .stat-n { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--amber); line-height: 1; }
+    .stat-l { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-top: 4px; letter-spacing: 1.5px; text-transform: uppercase; }
+
+    /* ─── RIGHT PANEL ─── */
+    .right-panel { display: flex; flex-direction: column; gap: 20px; }
+
+    .card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .card-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 13px 18px; border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-2); }
+    .badge {
+      font-family: var(--mono); font-size: 11px; color: var(--amber);
+      background: var(--amber-dim); padding: 2px 9px; border-radius: 5px;
+    }
+
+    /* Tasks */
+    .task-input-row {
+      display: flex; gap: 8px; padding: 13px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .task-input {
+      flex: 1; background: var(--bg-3); border: 1px solid var(--border-2);
+      border-radius: 8px; padding: 9px 13px;
+      font-family: var(--mono); font-size: 12px; color: var(--text-0);
+      outline: none; transition: border-color .2s;
+    }
+    .task-input::placeholder { color: var(--text-2); }
+    .task-input:focus { border-color: var(--amber); }
+    .add-btn {
+      background: var(--bg-3); border: 1px solid var(--border-2);
+      border-radius: 8px; padding: 9px 16px; color: var(--text-1);
+      font-size: 20px; cursor: pointer; transition: all .15s; line-height: 1;
+    }
+    .add-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+    .task-list { max-height: 270px; overflow-y: auto; padding: 6px 0; }
+    .task-list::-webkit-scrollbar { width: 3px; }
+    .task-list::-webkit-scrollbar-track { background: transparent; }
+    .task-list::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+    .task-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 18px; cursor: pointer; transition: background .12s;
+      border-left: 2px solid transparent;
+      animation: fadeSlide .2s ease;
+    }
+    @keyframes fadeSlide { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+    .task-item:hover { background: var(--bg-2); }
+    .task-item.focus-item { background: rgba(245,166,35,.04); border-left-color: var(--amber); padding-left: 16px; }
+
+    .check-ring {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 1.5px solid var(--border-2); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all .2s;
+    }
+    .check-ring:hover { border-color: var(--green); }
+    .check-ring.done { background: var(--green); border-color: var(--green); }
+    .check-ring.done::after { content: '✓'; color: #000; font-size: 9px; font-weight: 700; }
+
+    .task-name-text { flex: 1; font-family: var(--mono); font-size: 12px; color: var(--text-0); }
+    .task-name-text.done { text-decoration: line-through; color: var(--text-2); }
+
+    .del-btn { opacity: 0; border: none; background: none; color: var(--red); font-size: 13px; cursor: pointer; padding: 3px 5px; border-radius: 4px; transition: opacity .15s; }
+    .task-item:hover .del-btn { opacity: 1; }
+
+    .empty-state { padding: 30px 18px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+
+    /* Heatmap */
+    .heatmap-wrap { padding: 16px 18px; }
+    .heatmap-sub { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-bottom: 12px; }
+    .heatmap-row { display: flex; gap: 4px; flex-wrap: wrap; }
+    .slot {
+      width: 26px; height: 26px; border-radius: 5px;
+      background: var(--bg-3); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 8px; color: var(--text-2);
+      position: relative; transition: all .3s;
+    }
+    .slot.now { border-color: var(--amber); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{border-color:var(--amber)} 50%{border-color:rgba(245,166,35,.25)} }
+    .slot.s1 { background: rgba(245,166,35,.12); border-color: rgba(245,166,35,.25); }
+    .slot.s2 { background: rgba(245,166,35,.30); border-color: rgba(245,166,35,.5); }
+    .slot.s3 { background: rgba(245,166,35,.58); border-color: var(--amber); }
+    .slot.s4 { background: var(--amber); border-color: var(--amber); color: #000; }
+    .slot-tip {
+      position: absolute; bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%);
+      background: var(--bg-3); border: 1px solid var(--border-2);
+      border-radius: 6px; padding: 4px 8px; font-size: 10px; color: var(--text-0);
+      white-space: nowrap; pointer-events: none; opacity: 0; z-index: 20;
+      transition: opacity .15s;
+    }
+    .slot:hover .slot-tip { opacity: 1; }
+
+    /* Quote */
+    .quote-body { padding: 16px 18px; min-height: 80px; }
+    .q-loading { font-family: var(--mono); font-size: 11px; color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+    .q-loading::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      border: 1.5px solid var(--text-2); border-top-color: var(--amber);
+      animation: spin .7s linear infinite; display: block;
+    }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .q-text { font-size: 13px; color: var(--text-1); font-style: italic; line-height: 1.65; margin-bottom: 7px; }
+    .q-author { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--bg-3); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 13px 18px;
+      font-family: var(--mono); font-size: 12px; color: var(--text-0);
+      display: flex; align-items: center; gap: 10px;
+      transform: translateY(16px); opacity: 0;
+      transition: all .3s ease; z-index: 100; max-width: 300px;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast-icon { color: var(--amber); font-size: 14px; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border); padding: 15px 0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .footer-brand { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+    .shortcut-row { display: flex; gap: 18px; }
+    .sc { font-family: var(--mono); font-size: 11px; color: var(--text-2); display: flex; align-items: center; gap: 5px; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 780px) {
+      main { grid-template-columns: 1fr; }
+      .timer-svg-box { width: 240px; height: 240px; }
+      .timer-time { font-size: 44px; }
+      .shortcut-row { display: none; }
+      .kbd-row { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- HEADER -->
+    <header>
+      <div class="logo">dev<em>/</em>flow</div>
+      <div class="header-meta">
+        <div class="live-clock" id="clock">--:--:--</div>
+        <div class="kbd-row">
+          <div class="kbd-hint"><span class="k">SPC</span> start</div>
+          <div class="kbd-hint"><span class="k">R</span> reset</div>
+          <div class="kbd-hint"><span class="k">N</span> next</div>
+          <div class="kbd-hint"><span class="k">T</span> task</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN -->
+    <main>
+
+      <!-- TIMER COLUMN -->
+      <section class="timer-panel" aria-label="Pomodoro timer">
+
+        <!-- Mode pills -->
+        <div class="mode-pills" role="group" aria-label="Timer mode">
+          <button class="mode-btn active" data-mode="focus">FOCUS</button>
+          <button class="mode-btn" data-mode="short">S.BREAK</button>
+          <button class="mode-btn" data-mode="long">L.BREAK</button>
+        </div>
+
+        <!-- SVG ring timer -->
+        <div class="timer-wrapper">
+          <div class="timer-svg-box">
+            <svg class="timer-svg" viewBox="0 0 280 280" aria-hidden="true">
+              <circle class="ring-track" cx="140" cy="140" r="125"/>
+              <circle class="ring-progress" id="ring" cx="140" cy="140" r="125"/>
+            </svg>
+            <div class="timer-inner">
+              <div class="timer-time" id="display">25:00</div>
+              <div class="timer-mode-label" id="modeLabel">FOCUS</div>
+              <div class="session-pips" id="pips">
+                <div class="pip"></div><div class="pip"></div>
+                <div class="pip"></div><div class="pip"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="timer-controls">
+            <button class="btn btn-ghost" id="resetBtn">↺&nbsp;reset</button>
+            <button class="btn btn-primary" id="startBtn">▶&nbsp;start</button>
+            <button class="btn btn-ghost" id="skipBtn">skip&nbsp;↷</button>
+          </div>
+        </div>
+
+        <!-- Active task bar -->
+        <div class="active-task-bar" id="taskBar">
+          <span class="active-task-prompt">&gt;_</span>
+          <span class="active-task-name empty" id="activeTaskLabel">no task selected — add one →</span>
+        </div>
+
+        <!-- Stat strip -->
+        <div class="stat-strip">
+          <div class="stat"><div class="stat-n" id="statS">0</div><div class="stat-l">Sessions</div></div>
+          <div class="stat"><div class="stat-n" id="statF">0m</div><div class="stat-l">Focused</div></div>
+          <div class="stat"><div class="stat-n" id="statD">0</div><div class="stat-l">Done</div></div>
+        </div>
+
+      </section>
+
+      <!-- RIGHT COLUMN -->
+      <section class="right-panel">
+
+        <!-- ── TASK QUEUE ── -->
+        <article class="card" aria-label="Task queue">
+          <div class="card-head">
+            <span class="card-title">task queue</span>
+            <span class="badge" id="taskBadge">0 tasks</span>
+          </div>
+          <div class="task-input-row">
+            <input class="task-input" id="taskInput" type="text" placeholder="what are you shipping today?" maxlength="80" aria-label="New task"/>
+            <button class="add-btn" id="addBtn" aria-label="Add task">+</button>
+          </div>
+          <div class="task-list" id="taskList" role="list">
+            <div class="empty-state" id="emptyMsg">no tasks yet — add your first one above</div>
+          </div>
+        </article>
+
+        <!-- ── SESSION HEATMAP ── -->
+        <article class="card" aria-label="Today's session log">
+          <div class="card-head">
+            <span class="card-title">today's sessions</span>
+            <span class="badge" id="dateLbl"></span>
+          </div>
+          <div class="heatmap-wrap">
+            <div class="heatmap-sub">6:00 am → midnight &nbsp;·&nbsp; each block = 30 min</div>
+            <div class="heatmap-row" id="heatmap" role="img" aria-label="Session heatmap"></div>
+          </div>
+        </article>
+
+        <!-- ── INSPIRATION ── -->
+        <article class="card" aria-label="Inspirational quote">
+          <div class="card-head">
+            <span class="card-title">inspiration</span>
+            <button class="btn btn-ghost" id="reloadQuote" style="padding:4px 11px;font-size:11px;">↻&nbsp;new</button>
+          </div>
+          <div class="quote-body">
+            <div class="q-loading" id="qLoad">fetching quote...</div>
+            <div id="qContent" style="display:none">
+              <p class="q-text" id="qText"></p>
+              <p class="q-author" id="qAuthor"></p>
+            </div>
+          </div>
+        </article>
+
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+      <div class="footer-brand">built with focus. ship things that matter.</div>
+      <div class="shortcut-row">
+        <span class="sc"><span class="k">SPACE</span> start / pause</span>
+        <span class="sc"><span class="k">R</span> reset</span>
+        <span class="sc"><span class="k">N</span> next mode</span>
+        <span class="sc"><span class="k">T</span> focus task input</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span class="toast-icon">◈</span>
+    <span id="toastText">Done!</span>
+  </div>
+
+  <script>
+    /* ══════════════════════════════
+       STATE
+    ══════════════════════════════ */
+    const MODES = {
+      focus: { label: 'FOCUS',       dur: 25*60, color: '#f5a623' },
+      short: { label: 'SHORT BREAK', dur:  5*60, color: '#00d68f' },
+      long:  { label: 'LONG BREAK',  dur: 15*60, color: '#4d9de0' },
+    };
+
+    let mode        = 'focus';
+    let total       = MODES.focus.dur;
+    let left        = total;
+    let running     = false;
+    let timer       = null;
+    let sessions    = 0;        // completed focus sessions
+    let focusMins   = 0;
+    let activeId    = null;
+    let tasks       = JSON.parse(localStorage.getItem('df_tasks')    || '[]');
+    let sessionLog  = JSON.parse(localStorage.getItem('df_sessions') || '[]');
+
+    /* ══════════════════════════════
+       DOM REFS
+    ══════════════════════════════ */
+    const $  = id => document.getElementById(id);
+    const display     = $('display');
+    const modeLabel   = $('modeLabel');
+    const ring        = $('ring');
+    const startBtn    = $('startBtn');
+    const resetBtn    = $('resetBtn');
+    const skipBtn     = $('skipBtn');
+    const pips        = $('pips');
+    const activeLabel = $('activeTaskLabel');
+    const taskInput   = $('taskInput');
+    const addBtn      = $('addBtn');
+    const taskList    = $('taskList');
+    const emptyMsg    = $('emptyMsg');
+    const taskBadge   = $('taskBadge');
+    const heatmap     = $('heatmap');
+    const toast       = $('toast');
+    const toastText   = $('toastText');
+    const clock       = $('clock');
+    const dateLbl     = $('dateLbl');
+    const statS       = $('statS');
+    const statF       = $('statF');
+    const statD       = $('statD');
+
+    /* ══════════════════════════════
+       SVG RING
+    ══════════════════════════════ */
+    const R   = 125;
+    const C   = 2 * Math.PI * R;
+    ring.style.strokeDasharray  = C;
+    ring.style.strokeDashoffset = 0;
+
+    function setRing(l, t) {
+      ring.style.strokeDashoffset = C * (1 - l / t);
+    }
+
+    /* ══════════════════════════════
+       TIMER CORE
+    ══════════════════════════════ */
+    function fmt(s) {
+      return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+    }
+
+    function applyMode(m) {
+      mode  = m;
+      total = MODES[m].dur;
+      left  = total;
+      running = false;
+      clearInterval(timer);
+
+      display.classList.remove('paused');
+      display.textContent  = fmt(left);
+      modeLabel.textContent = MODES[m].label;
+      startBtn.textContent  = '▶\u00A0start';
+      ring.style.stroke     = MODES[m].color;
+      setRing(left, total);
+
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    }
+
+    function toggleStart() {
+      if (running) {
+        running = false;
+        clearInterval(timer);
+        startBtn.textContent = '▶\u00A0resume';
+        display.classList.add('paused');
+        return;
+      }
+      running = true;
+      display.classList.remove('paused');
+      startBtn.textContent = '⏸\u00A0pause';
+
+      timer = setInterval(() => {
+        left--;
+        display.textContent = fmt(left);
+        setRing(left, total);
+        document.title = `${fmt(left)} — DevFlow`;
+        if (left <= 0) { clearInterval(timer); running = false; onComplete(); }
+      }, 1000);
+    }
+
+    function doReset() {
+      clearInterval(timer);
+      running = false;
+      left = total;
+      display.classList.remove('paused');
+      display.textContent  = fmt(left);
+      startBtn.textContent = '▶\u00A0start';
+      setRing(left, total);
+      document.title = 'DevFlow — Developer Focus Tracker';
+    }
+
+    function onComplete() {
+      display.classList.remove('paused');
+      startBtn.textContent = '▶\u00A0start';
+
+      if (mode === 'focus') {
+        sessions++;
+        focusMins += 25;
+        logSession();
+        updateStats();
+        updatePips();
+        notify('🎯 Focus session complete! Great work.');
+        fetchQuote();
+        applyMode(sessions % 4 === 0 ? 'long' : 'short');
+      } else {
+        notify('⚡ Break over — back to it!');
+        applyMode('focus');
+      }
+    }
+
+    /* ══════════════════════════════
+       SESSION PIPS (× 4 cycle)
+    ══════════════════════════════ */
+    function updatePips() {
+      const filled = sessions % 4 === 0 && sessions > 0 ? 4 : sessions % 4;
+      pips.querySelectorAll('.pip').forEach((p, i) => p.classList.toggle('lit', i < filled));
+    }
+
+    /* ══════════════════════════════
+       HEATMAP (6 AM – midnight = 36 half-hour slots)
+    ══════════════════════════════ */
+    function logSession() {
+      const now = new Date();
+      const key = now.toDateString();
+      const slot = now.getHours() * 2 + (now.getMinutes() >= 30 ? 1 : 0);
+      sessionLog = sessionLog.filter(s => s.date === key);
+      sessionLog.push({ date: key, slot });
+      localStorage.setItem('df_sessions', JSON.stringify(sessionLog));
+      renderHeatmap();
+    }
+
+    function renderHeatmap() {
+      heatmap.innerHTML = '';
+      const key = new Date().toDateString();
+      const today = sessionLog.filter(s => s.date === key);
+      const nowSlot = new Date().getHours() * 2 + (new Date().getMinutes() >= 30 ? 1 : 0);
+
+      for (let i = 12; i <= 47; i++) {
+        const cnt   = today.filter(s => s.slot === i).length;
+        const el    = document.createElement('div');
+        el.className = 'slot' + (cnt ? ` s${Math.min(cnt,4)}` : '') + (i === nowSlot && running ? ' now' : '');
+
+        const h24   = Math.floor(i / 2);
+        const half  = i % 2 ? ':30' : ':00';
+        const h12   = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+        const ampm  = h24 < 12 ? 'am' : 'pm';
+        const label = `${h12}${half}${ampm}`;
+
+        el.innerHTML = `<div class="slot-tip">${label}${cnt ? ` · ${cnt} session${cnt>1?'s':''}` : ''}</div>`;
+        heatmap.appendChild(el);
+      }
+    }
+
+    /* ══════════════════════════════
+       TASKS
+    ══════════════════════════════ */
+    function save() { localStorage.setItem('df_tasks', JSON.stringify(tasks)); }
+
+    function renderTasks() {
+      taskList.innerHTML = '';
+      const pending = tasks.filter(t => !t.done);
+      const done    = tasks.filter(t =>  t.done);
+
+      taskBadge.textContent = `${pending.length} task${pending.length !== 1 ? 's' : ''}`;
+      emptyMsg.style.display = tasks.length === 0 ? 'block' : 'none';
+
+      [...pending, ...done].forEach(t => {
+        const li = document.createElement('div');
+        li.className = `task-item${t.id === activeId ? ' focus-item' : ''}`;
+        li.setAttribute('role', 'listitem');
+        li.innerHTML = `
+          <div class="check-ring ${t.done?'done':''}" data-id="${t.id}" title="Mark done" role="checkbox" aria-checked="${t.done}"></div>
+          <span class="task-name-text ${t.done?'done':''}">${esc(t.name)}</span>
+          <button class="del-btn" data-id="${t.id}" title="Delete task" aria-label="Delete ${esc(t.name)}">✕</button>
+        `;
+
+        // Click row → set as active (focus) task
+        li.addEventListener('click', e => {
+          if (e.target.classList.contains('check-ring') || e.target.classList.contains('del-btn')) return;
+          if (!t.done) {
+            activeId = t.id === activeId ? null : t.id;
+            updateActiveBar();
+            renderTasks();
+          }
+        });
+
+        // Check ring → toggle done
+        li.querySelector('.check-ring').addEventListener('click', () => {
+          t.done = !t.done;
+          if (t.done && activeId === t.id) { activeId = null; updateActiveBar(); }
+          save(); renderTasks(); updateStats();
+        });
+
+        // Delete
+        li.querySelector('.del-btn').addEventListener('click', e => {
+          e.stopPropagation();
+          tasks = tasks.filter(x => x.id !== t.id);
+          if (activeId === t.id) { activeId = null; updateActiveBar(); }
+          save(); renderTasks(); updateStats();
+        });
+
+        taskList.appendChild(li);
+      });
+    }
+
+    function addTask() {
+      const name = taskInput.value.trim();
+      if (!name) return;
+      tasks.push({ id: Date.now(), name, done: false });
+      taskInput.value = '';
+      save(); renderTasks();
+    }
+
+    function updateActiveBar() {
+      const t = tasks.find(x => x.id === activeId);
+      if (t) {
+        activeLabel.textContent = t.name;
+        activeLabel.classList.remove('empty');
+      } else {
+        activeLabel.textContent = 'no task selected — add one →';
+        activeLabel.classList.add('empty');
+      }
+    }
+
+    function updateStats() {
+      statS.textContent = sessions;
+      const h = Math.floor(focusMins / 60);
+      const m = focusMins % 60;
+      statF.textContent = h > 0 ? `${h}h${m > 0 ? m+'m' : ''}` : `${m}m`;
+      statD.textContent = tasks.filter(t => t.done).length;
+    }
+
+    function esc(s) {
+      return s.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    }
+
+    /* ══════════════════════════════
+       FETCH API — QUOTES
+    ══════════════════════════════ */
+    async function fetchQuote() {
+      const qLoad    = $('qLoad');
+      const qContent = $('qContent');
+      const qText    = $('qText');
+      const qAuthor  = $('qAuthor');
+
+      qLoad.style.display    = 'flex';
+      qContent.style.display = 'none';
+
+      try {
+        const res  = await fetch('https://api.quotable.io/quotes/random?limit=1&tags=technology|success|inspirational');
+        if (!res.ok) throw new Error('bad response');
+        const data = await res.json();
+        const q    = Array.isArray(data) ? data[0] : data;
+        if (q && q.content) {
+          qText.textContent   = `"${q.content}"`;
+          qAuthor.textContent = `— ${q.author}`;
+          qLoad.style.display    = 'none';
+          qContent.style.display = 'block';
+          return;
+        }
+        throw new Error('empty');
+      } catch {
+        // Curated fallback quotes
+        const fallbacks = [
+          { t: '"Programs must be written for people to read, and only incidentally for machines to execute."', a: '— Harold Abelson' },
+          { t: '"The best way to predict the future is to invent it."', a: '— Alan Kay' },
+          { t: '"Simplicity is the soul of efficiency."', a: '— Austin Freeman' },
+          { t: '"First, solve the problem. Then, write the code."', a: '— John Johnson' },
+          { t: '"Code is like humor. When you have to explain it, it\'s bad."', a: '— Cory House' },
+          { t: '"Make it work, make it right, make it fast."', a: '— Kent Beck' },
+        ];
+        const r = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+        qText.textContent   = r.t;
+        qAuthor.textContent = r.a;
+        qLoad.style.display    = 'none';
+        qContent.style.display = 'block';
+      }
+    }
+
+    /* ══════════════════════════════
+       TOAST
+    ══════════════════════════════ */
+    let toastTimer;
+    function notify(msg) {
+      clearTimeout(toastTimer);
+      toastText.textContent = msg;
+      toast.classList.add('show');
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 3600);
+    }
+
+    /* ══════════════════════════════
+       CLOCK + DATE
+    ══════════════════════════════ */
+    function tickClock() {
+      clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+    }
+
+    /* ══════════════════════════════
+       EVENT BINDINGS
+    ══════════════════════════════ */
+    startBtn.addEventListener('click', toggleStart);
+    resetBtn.addEventListener('click', doReset);
+    skipBtn.addEventListener('click', () => { clearInterval(timer); running = false; onComplete(); });
+
+    document.querySelectorAll('.mode-btn').forEach(b => {
+      b.addEventListener('click', () => applyMode(b.dataset.mode));
+    });
+
+    addBtn.addEventListener('click', addTask);
+    taskInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+
+    $('reloadQuote').addEventListener('click', fetchQuote);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+      const focus = document.activeElement;
+      if (focus && (focus.tagName === 'INPUT' || focus.tagName === 'TEXTAREA')) return;
+      const map = { Space: toggleStart, KeyR: doReset, KeyN: nextMode, KeyT: () => taskInput.focus() };
+      if (map[e.code]) { e.preventDefault(); map[e.code](); }
+    });
+
+    function nextMode() {
+      const order = ['focus','short','long'];
+      applyMode(order[(order.indexOf(mode)+1) % 3]);
+    }
+
+    /* ══════════════════════════════
+       INIT
+    ══════════════════════════════ */
+    (function init() {
+      tickClock();
+      setInterval(tickClock, 1000);
+      setInterval(renderHeatmap, 60_000);
+
+      dateLbl.textContent = new Date().toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric'
+      });
+
+      applyMode('focus');
+      renderTasks();
+      renderHeatmap();
+      fetchQuote();
+      updateStats();
+    })();
+  </script>
+</body>
+</html>
